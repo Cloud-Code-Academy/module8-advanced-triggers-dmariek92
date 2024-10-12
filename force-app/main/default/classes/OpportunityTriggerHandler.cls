@@ -1,25 +1,5 @@
 public with sharing class OpportunityTriggerHandler extends TriggerHandler{
-    
-    // public static void execute(List<Opportunity> triggerDotNew, List<Opportunity> triggerDotOld, Map<Id,Opportunity> triggerOldMap, Map<Id,Opportunity> triggerNewMap) {
-    //     if(Trigger.isBefore && Trigger.isUpdate){
-    //         updateOpps(triggerDotNew);
-    //     }
-    //     if(Trigger.isBefore && Trigger.isDelete){
-    //         whenDelete(triggerDotOld);
-    //     }
-    //     if(Trigger.isBefore && Trigger.isInsert){
-    //         setType(triggerDotNew);
-    //     }
-    //     if(Trigger.isAfter && Trigger.isInsert){
-    //         createTask(triggerDotNew);
-    //     }
-    //     if(Trigger.isAfter && Trigger.isUpdate){
-    //         updateDes(triggerDotNew, triggerOldMap);
-    //     }
-    //     if(Trigger.isAfter && Trigger.isUndelete) {
-    //         assignCon(triggerNewMap);
-    //     }
-    // }
+ 
     private List<Opportunity> newOppList;
     private List<Opportunity> oldOppList;
     private Map<Id, Opportunity> newOppMap;
@@ -32,6 +12,16 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
         this.oldOppList = (List<Opportunity>)Trigger.old;
         this.newOppMap = (Map<Id,Opportunity>)Trigger.newMap;
         this.oldOppMap = (Map<Id,Opportunity>)Trigger.oldMap;
+    }
+
+
+    public override void beforeInsert(){
+        // Set default Type for new Opportunities
+        for(Opportunity opp : this.newOppList){
+            if (opp.Type == null){
+                opp.Type = 'New Customer';
+            }        
+        }
     }
 
     /*
@@ -64,14 +54,8 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
                    opp.Primary_Contact__c = accountIdToContact.get(opp.AccountId).Id;
                }
            }
-           // Append Stage changes in Opportunity Description
-           Opportunity oppOld = this.oldOppMap.get(opp.Id);
-            if (oppOld.StageName != null){
-                opp.Description += '\n Stage Change:' + oppOld.StageName + ':' + DateTime.now().format();
-            }
-        } 
+       }  
     }
-
 
     /*
     * Opportunity Trigger
@@ -84,21 +68,9 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
             if (oldOpp.IsClosed){
                 oldOpp.addError('Cannot delete closed opportunity');
             }
-            else {
-                notifyOwnersOpportunityDeleted(this.oldOppList);
-            }
         }
     }
 
-
-    public override void beforeInsert(){
-        // Set default Type for new Opportunities
-        for(Opportunity opp : this.newOppList){
-            if (opp.Type == null){
-                opp.Type = 'New Customer';
-            }        
-        }
-    }
  
     public override void afterInsert() {
         // Create a new Task for newly inserted Opportunities
@@ -116,19 +88,24 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
     }
 
 
-    // public override void afterUpdate() {
-    //     // Append Stage changes in Opportunity Description
-    //     List<Opportunity> updateOpps = new List<Opportunity>();
-    //     for(Opportunity opp : this.newOppList){
-    //         Opportunity oppOld = this.oldOppMap.get(opp.Id);
-    //         if (oppOld.StageName != null){
-    //             Opportunity newOpp = new Opportunity(Id = opp.Id);
-    //             newOpp.Description += '\n Stage Change:' + oppOld.StageName + ':' + DateTime.now().format();
-    //             updateOpps.add(newOpp);
-    //         }            
-    //     }
-    //     update updateOpps;
-    // }
+    public override void afterUpdate() {
+        // Append Stage changes in Opportunity Description
+        List<Opportunity> updateOpps = new List<Opportunity>();
+        for(Opportunity opp : this.newOppList){
+            Opportunity oppOld = this.oldOppMap.get(opp.Id);
+            if (oppOld.StageName != null && oppOld.StageName != opp.StageName){
+                Opportunity newOpp = new Opportunity(Id = opp.Id);
+                newOpp.Description += '\n Stage Change:' + opp.StageName + ':' + DateTime.now().format();
+                updateOpps.add(newOpp);
+            }            
+        }
+        update updateOpps;
+    }
+
+
+    public override void afterDelete() {
+        notifyOwnersOpportunityDeleted(this.oldOppList);
+    }
 
     /*
     - Assigns a primary contact with the title of 'VP Sales' to undeleted Opportunities.
@@ -136,7 +113,7 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
     */  
     public override void afterUndelete() {    
         Set<Id> oppAccountIds = new Set<Id>(); //create set of unduplciated Opportunity AccountIds to use to query related Contacts
-        for (Opportunity opp : this.oldOppMap.values()){
+        for (Opportunity opp : this.newOppMap.values()){
             if (opp.AccountId != null){
                 oppAccountIds.add(opp.AccountId);
             }
@@ -155,7 +132,7 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
                 oppsToUpdate.add(newOpp);
             }
         }
-        insert oppsToUpdate;
+        update oppsToUpdate;
     }
 
     /*
