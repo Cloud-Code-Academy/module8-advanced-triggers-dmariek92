@@ -24,14 +24,14 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
     private List<Opportunity> oldOppList;
     private Map<Id, Opportunity> newOppMap;
     private Map<Id, Opportunity> oldOppMap;
+    public static Boolean hasRun = false;
+    
 
     public OpportunityTriggerHandler(){
         this.newOppList = (List<Opportunity>)Trigger.new;
         this.oldOppList = (List<Opportunity>)Trigger.old;
         this.newOppMap = (Map<Id,Opportunity>)Trigger.newMap;
         this.oldOppMap = (Map<Id,Opportunity>)Trigger.oldMap;
-
-        this.setMaxLoopCount(2);
     }
 
     /*
@@ -64,8 +64,14 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
                    opp.Primary_Contact__c = accountIdToContact.get(opp.AccountId).Id;
                }
            }
-       }  
+           // Append Stage changes in Opportunity Description
+           Opportunity oppOld = this.oldOppMap.get(opp.Id);
+            if (oppOld.StageName != null){
+                opp.Description += '\n Stage Change:' + oppOld.StageName + ':' + DateTime.now().format();
+            }
+        } 
     }
+
 
     /*
     * Opportunity Trigger
@@ -110,19 +116,19 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler{
     }
 
 
-    public override void afterUpdate() {
-        // Append Stage changes in Opportunity Description
-        List<Opportunity> updateOpps = new List<Opportunity>();
-        for(Opportunity opp : this.newOppList){
-            Opportunity oppOld = this.oldOppMap.get(opp.Id);
-            if (oppOld.StageName != null){
-                Opportunity newOpp = new Opportunity(Id = opp.Id);
-                newOpp.Description += '\n Stage Change:' + oppOld.StageName + ':' + DateTime.now().format();
-                updateOpps.add(newOpp);
-            }            
-        }
-        update updateOpps;
-    }
+    // public override void afterUpdate() {
+    //     // Append Stage changes in Opportunity Description
+    //     List<Opportunity> updateOpps = new List<Opportunity>();
+    //     for(Opportunity opp : this.newOppList){
+    //         Opportunity oppOld = this.oldOppMap.get(opp.Id);
+    //         if (oppOld.StageName != null){
+    //             Opportunity newOpp = new Opportunity(Id = opp.Id);
+    //             newOpp.Description += '\n Stage Change:' + oppOld.StageName + ':' + DateTime.now().format();
+    //             updateOpps.add(newOpp);
+    //         }            
+    //     }
+    //     update updateOpps;
+    // }
 
     /*
     - Assigns a primary contact with the title of 'VP Sales' to undeleted Opportunities.
